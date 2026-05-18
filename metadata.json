@@ -1,0 +1,11 @@
+{
+  "name": "DEVELOPER AI",
+  "description": "Professional AI assistant for chat, image generation, coding, and web analysis.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
