@@ -5,4 +5,11 @@ export interface Message {
   timestamp: number;
 }
 
-export type ViewType = 'chat' | 'image' | 'image-edit' | 'code' | 'code-edit' | 'search' | 'analyze' | 'file-analyze' | 'pricing' | 'video' | 'music' | 'translate';
+export type ViewType = 'chat' | 'image' | 'image-edit' | 'code' | 'code-edit' | 'search' | 'analyze' | 'file-analyze' | 'pricing' | 'video' | 'music' | 'translate' | 'profile' | 'billing' | 'browser';
+
+export interface SearchSource {
+  web?: {
+    uri: string;
+    title: string;
+  };
+}

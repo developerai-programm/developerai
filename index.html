@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DEVELOPER AI - Professional AI Assistant</title>
     <meta name="description" content="DEVELOPER AI professional sun'iy intellekt yordamchisi." />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/000000/bot.png" />
+    <script>
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          var descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (descriptor && descriptor.configurable) {
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function(v) { originalFetch = v; },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script async src="https://telegram.org/js/telegram-widget.js?22"></script>
   </head>
   <body class="bg-[#0b0c0d]">
     <div id="root"></div>

@@ -37,3 +37,294 @@
 [data-radix-tooltip-content] {
   @apply bg-white border border-gray-200 text-gray-900 shadow-xl;
 }
+
+/* ================================================================= MusicPlayer Styles */
+.card {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  background: #ffffff;
+  border-radius: 32px;
+  padding: 24px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  border: 1px border border-gray-100;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+.card.is-zoomed {
+  max-width: 340px;
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.15), 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.mask {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 16px 32px -12px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  background: #020202;
+  transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.mask:hover {
+  transform: scale(1.04);
+}
+
+.spin {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  transform-origin: center;
+}
+
+.cover-enter {
+  animation: coverEnter 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.cover-exit {
+  animation: coverExit 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+@keyframes coverEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes coverExit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+.hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.hole-inner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #09090b;
+}
+
+.info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scales {
+  width: 100%;
+  height: 36px;
+  color: #3b82f6; /* Default accent color */
+  opacity: 0.15;
+  transition: opacity 0.3s;
+}
+
+.is-playing .scales {
+  opacity: 0.35;
+}
+
+.track-info {
+  position: relative;
+  width: 100%;
+  height: 52px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.ti-layer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ti-abs {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.artist {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b5cf6; /* Accent standard purple */
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.track {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0c0a09;
+  margin-top: 2px;
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ti-enter {
+  opacity: 0;
+  transform: translateX(var(--dx)) scale(0.95);
+  animation: tiEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ti-exit {
+  opacity: 1;
+  transform: translateX(0px) scale(1);
+  animation: tiExit 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tiEnter {
+  to {
+    opacity: 1;
+    transform: translateX(0px) scale(1);
+  }
+}
+
+@keyframes tiExit {
+  to {
+    opacity: 0;
+    transform: translateX(var(--dx)) scale(0.95);
+  }
+}
+
+.bar {
+  width: 100%;
+  height: 4px;
+  background: #e7e5e4;
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: height 0.2s;
+}
+
+.bar:hover {
+  height: 6px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #09090b;
+  border-radius: 2px;
+  width: 0%;
+}
+
+.time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: monospace;
+  color: #a8a29e;
+  margin-top: 2px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.ctrl {
+  background: none;
+  border: none;
+  color: #57534e;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ctrl:hover {
+  color: #000000;
+  background: #f5f5f4;
+}
+
+.ctrl-play {
+  background: #09090b;
+  color: #ffffff;
+  width: 44px;
+  height: 44px;
+}
+
+.ctrl-play:hover {
+  background: #27272a;
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.ctrl-toggle.is-active {
+  color: #3b82f6;
+}
+
+.ctrl-loop {
+  position: relative;
+}
+
+.loop-one {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 8px;
+  font-weight: 900;
+  background: #3b82f6;
+  color: #ffffff;
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s;
+}
+
+.ctrl-loop.mode-one .loop-one {
+  opacity: 1;
+  transform: scale(1);
+}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Zap, Crown, Star, ArrowRight } from 'lucide-react';
+import { Check, Zap, Crown, Star, ArrowRight, Globe } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 
 const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
@@ -8,15 +8,37 @@ const cn = (...classes: (string | undefined | null | false)[]) => classes.filter
 export default function PricingView() {
   const [isAnnual, setIsAnnual] = useState(true);
 
-  const handleUpgrade = async (plan: string) => {
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+
+  const handleUpgrade = (plan: any) => {
+    setSelectedPlan(plan);
+    setShowPaymentModal(true);
+  };
+
+  const processPayment = async (method: 'checkout' | 'ton') => {
+    if (method === 'ton') {
+      let amount = "1835496054";
+      if (selectedPlan) {
+        if (selectedPlan.name === 'Pro') {
+          amount = isAnnual ? '19272708569' : '1835496054';
+        } else if (selectedPlan.name === 'Enterprise') {
+          amount = isAnnual ? '19272708569' : '2753244081';
+        }
+      }
+      window.location.href = `ton://transfer/UQC4o86OTxG3dgST9Mzgy2sdhG4zovI-ynqkpqhtrIOj2kp3?amount=${amount}`;
+      setShowPaymentModal(false);
+      return;
+    }
+
     try {
       const response = await globalThis.fetch('/api/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          plan: plan,
+          plan: selectedPlan.name,
           isAnnual: isAnnual,
-          userId: 'test_user_id'
+          userId: 'user_id' // In real app, get from auth state
         })
       });
       const data = await response.json();
@@ -171,23 +193,96 @@ export default function PricingView() {
                 </div>
               </div>
 
-              <div className="pt-10">
-                <button 
-                  onClick={() => handleUpgrade(plan.name)}
-                  className={cn(
-                    "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 group",
-                    plan.featured 
-                      ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200" 
-                      : "bg-gray-100 text-gray-900 hover:bg-gray-200 border border-gray-200"
-                  )}
-                >
-                  Boshlash
-                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                  <div className="pt-10">
+                    <button 
+                      onClick={() => handleUpgrade(plan)}
+                      className={cn(
+                        "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 group",
+                        plan.featured 
+                          ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200" 
+                          : "bg-gray-100 text-gray-900 hover:bg-gray-200 border border-gray-200"
+                      )}
+                    >
+                      Boshlash
+                      <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Payment Modal */}
+            <AnimatePresence>
+              {showPaymentModal && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowPaymentModal(false)}
+                    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+                  />
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                      className="w-full max-w-md bg-white rounded-[32px] overflow-hidden shadow-2xl pointer-events-auto"
+                    >
+                      <div className="p-8 space-y-6">
+                        <div className="text-center space-y-2">
+                          <h2 className="text-2xl font-bold text-gray-900">To'lov usuli</h2>
+                          <p className="text-gray-500 text-sm">
+                            {selectedPlan?.name} tarifi uchun to'lov usulini tanlang
+                          </p>
+                        </div>
+
+                        <div className="space-y-3">
+                          <button
+                            onClick={() => processPayment('checkout')}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                                <Globe size={24} />
+                              </div>
+                              <div className="text-left">
+                                <p className="font-bold text-gray-900">Checkout.uz</p>
+                                <p className="text-xs text-gray-400">Humo, UzCard orqali</p>
+                              </div>
+                            </div>
+                            <ArrowRight size={18} className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                          </button>
+
+                          <button
+                            onClick={() => processPayment('ton')}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="h-12 w-12 bg-blue-600 text-white rounded-xl flex items-center justify-center">
+                                <Zap size={24} />
+                              </div>
+                              <div className="text-left">
+                                <p className="font-bold text-gray-900">TON Wallet</p>
+                                <p className="text-xs text-gray-400">Telegram/TON orqali</p>
+                              </div>
+                            </div>
+                            <ArrowRight size={18} className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                          </button>
+                        </div>
+
+                        <button 
+                          onClick={() => setShowPaymentModal(false)}
+                          className="w-full py-2 text-sm text-gray-400 font-medium hover:text-gray-600 transition-colors"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                </>
+              )}
+            </AnimatePresence>
 
         {/* Footer info */}
         <div className="text-center pb-20">

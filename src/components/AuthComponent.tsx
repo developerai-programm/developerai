@@ -158,7 +158,11 @@ const TEXT_LOOP_INTERVAL = 1.5;
 
 const DefaultLogo = () => ( <div className="bg-blue-600 text-white rounded-md p-1.5"> <Gem className="h-4 w-4" /> </div> );
 
-// --- MAIN COMPONENT ---
+import { signInWithPopup, signInWithRedirect, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, googleProvider } from "../lib/firebase";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { handleFirestoreError, OperationType } from "../lib/firebaseUtils";
 interface AuthComponentProps {
   logo?: React.ReactNode;
   brandName?: string;
@@ -174,6 +178,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "DEVELOPER A
   const [authStep, setAuthStep] = useState("email");
   const [modalStatus, setModalStatus] = useState<'closed' | 'loading' | 'error' | 'success'>('closed');
   const [modalErrorMessage, setModalErrorMessage] = useState('');
+  const [activeProvider, setActiveProvider] = useState<any>(null);
+  const isAuthPending = useRef(false);
   const confettiRef = useRef<ConfettiRef>(null);
 
   const isEmailValid = /\S+@\S+\.\S+/.test(email);
@@ -193,7 +199,152 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "DEVELOPER A
     }
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleSocialLogin = async (provider: any) => {
+    if (modalStatus === 'loading' || isAuthPending.current) return;
+    isAuthPending.current = true;
+    try {
+      setModalStatus('loading');
+      setActiveProvider(provider);
+      // Adding a small delay to avoid race conditions with auth state cycles
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Save user to firestore
+      const userRef = doc(db, 'users', user.uid);
+      try {
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          lastLogin: serverTimestamp(),
+          createdAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+      }
+
+      fireSideCanons();
+      setModalStatus('success');
+      setTimeout(() => {
+        if (onLoginSuccess) onLoginSuccess(user);
+        closeModal();
+      }, 1500);
+    } catch (error: any) {
+      isAuthPending.current = false;
+      console.error('Login Error:', error);
+      let message = error.message;
+      if (error.code === 'auth/popup-blocked') {
+        message = "Brauzer popupni blokladi. Iltimos, popupga ruxsat bering yoki Redirect orqali urinib ko'ring.";
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        message = "Kirish bekor qilindi yoki popup yopildi.";
+      } else if (error.message.includes('Assertion failed')) {
+        message = "Firebase xatoligi. Iltimos, sahifani yangilang va qayta urinib ko'ring.";
+      }
+      setModalErrorMessage(message);
+      setModalStatus('error');
+    }
+  };
+
+  const handleGitHubLogin = () => {
+    if (modalStatus === 'loading' || isAuthPending.current) return;
+    isAuthPending.current = true;
+    setModalStatus('loading');
+    
+    // Open popup
+    const width = 600;
+    const height = 700;
+    const left = window.innerWidth / 2 - width / 2;
+    const top = window.innerHeight / 2 - height / 2;
+    const popup = window.open('/api/auth/github', 'github-auth', `width=${width},height=${height},left=${left},top=${top}`);
+
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data.type === 'AUTH_SUCCESS') {
+        window.removeEventListener('message', handleMessage);
+        try {
+          const result = await signInWithCustomToken(auth, event.data.token);
+          const user = result.user;
+          fireSideCanons();
+          setModalStatus('success');
+          setTimeout(() => {
+            if (onLoginSuccess) onLoginSuccess(user);
+            closeModal();
+          }, 1500);
+        } catch (e: any) {
+          isAuthPending.current = false;
+          setModalErrorMessage(e.message);
+          setModalStatus('error');
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+  };
+
+  const handleTelegramLogin = () => {
+    // @ts-ignore
+    if (!window.Telegram) {
+        setModalErrorMessage("Telegram widgeti yuklanmadi. Sahifani yangilang.");
+        setModalStatus('error');
+        return;
+    }
+    if (modalStatus === 'loading' || isAuthPending.current) return;
+    isAuthPending.current = true;
+    setModalStatus('loading');
+
+    const botIdStr = (import.meta as any).env.VITE_TELEGRAM_BOT_ID || '8824484746';
+    const botId = parseInt(botIdStr, 10);
+    const origin = window.location.origin;
+
+    // @ts-ignore
+    window.Telegram.Login.auth(
+      { bot_id: botId, request_access: true, origin: origin },
+      async (data: any) => {
+        if (!data) {
+          isAuthPending.current = false;
+          setModalStatus('error');
+          setModalErrorMessage("Telegram orqali kirish bekor qilindi.");
+          return;
+        }
+        try {
+          const response = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auth_data: data })
+          });
+          const result = await response.json();
+          if (result.token) {
+            const userCredential = await signInWithCustomToken(auth, result.token);
+            fireSideCanons();
+            setModalStatus('success');
+            setTimeout(() => {
+                if (onLoginSuccess) onLoginSuccess(userCredential.user);
+                closeModal();
+            }, 1500);
+          } else {
+            throw new Error(result.error || "Failed to authenticate with Telegram");
+          }
+        } catch (e: any) {
+          isAuthPending.current = false;
+          setModalErrorMessage(e.message);
+          setModalStatus('error');
+        }
+      }
+    );
+  };
+
+  const handleRedirectLogin = async () => {
+    if (!activeProvider) return;
+    try {
+      setModalStatus('loading');
+      await signInWithRedirect(auth, activeProvider);
+    } catch (error: any) {
+      setModalErrorMessage(error.message);
+      setModalStatus('error');
+    }
+  };
+
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (modalStatus !== 'closed' || authStep !== 'confirmPassword') return;
 
@@ -201,16 +352,35 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "DEVELOPER A
         setModalErrorMessage("Passwords do not match!");
         setModalStatus('error');
     } else {
-        setModalStatus('loading');
-        const loadingStepsCount = modalSteps.length - 1;
-        const totalDuration = loadingStepsCount * TEXT_LOOP_INTERVAL * 1000;
-        setTimeout(() => {
-            fireSideCanons();
-            setModalStatus('success');
-            if (onLoginSuccess) {
-              onLoginSuccess({ email, name: email.split('@')[0] });
-            }
-        }, totalDuration);
+        try {
+          setModalStatus('loading');
+          const result = await createUserWithEmailAndPassword(auth, email, password);
+          const user = result.user;
+
+          // Save user to firestore
+          const userRef = doc(db, 'users', user.uid);
+          try {
+            await setDoc(userRef, {
+              uid: user.uid,
+              email: user.email,
+              displayName: email.split('@')[0],
+              createdAt: serverTimestamp(),
+              lastLogin: serverTimestamp()
+            }, { merge: true });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+          }
+
+          fireSideCanons();
+          setModalStatus('success');
+          setTimeout(() => {
+            if (onLoginSuccess) onLoginSuccess(user);
+            closeModal();
+          }, 1500);
+        } catch (error: any) {
+          setModalErrorMessage(error.message);
+          setModalStatus('error');
+        }
     }
   };
 
@@ -240,6 +410,9 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "DEVELOPER A
   const closeModal = () => {
     setModalStatus('closed');
     setModalErrorMessage('');
+    setAuthStep("email");
+    setActiveProvider(null);
+    isAuthPending.current = false;
   };
 
 useEffect(() => {
@@ -261,8 +434,17 @@ useEffect(() => {
                     {(modalStatus === 'error' || modalStatus === 'success') && <button onClick={closeModal} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-900 transition-colors"><X className="w-5 h-5" /></button>}
                     {modalStatus === 'error' && <>
                         <AlertCircle className="w-12 h-12 text-red-500" />
-                        <p className="text-lg font-medium text-gray-900">{modalErrorMessage}</p>
-                        <GlassButton onClick={closeModal} size="sm" className="mt-4">Try Again</GlassButton>
+                        <p className="text-sm text-center text-gray-900">{modalErrorMessage}</p>
+                        <div className="flex flex-col gap-2 w-full mt-2">
+                             {activeProvider && (modalErrorMessage.includes('popup') || modalErrorMessage.includes('blokladi')) && (
+                                <GlassButton onClick={handleRedirectLogin} className="w-full">
+                                    <span className="font-semibold text-blue-600">Redirect orqali</span>
+                                </GlassButton>
+                            )}
+                            <GlassButton onClick={closeModal} size="sm" className="w-full">
+                                <span className="font-semibold text-gray-900">Yopish</span>
+                            </GlassButton>
+                        </div>
                     </>}
                     {modalStatus === 'loading' && 
                         <TextLoop interval={TEXT_LOOP_INTERVAL} stopOnEnd={true}>
@@ -312,9 +494,15 @@ useEffect(() => {
                         <BlurFade delay={0.25 * 1} className="w-full"><div className="text-center"><p className="font-serif font-light text-4xl sm:text-5xl md:text-6xl tracking-tight text-gray-900 whitespace-nowrap">DEVELOPER AI</p></div></BlurFade>
                         <BlurFade delay={0.25 * 2}><p className="text-sm font-medium text-gray-500">Tizimga kirish</p></BlurFade>
                         <BlurFade delay={0.25 * 3}><div className="flex flex-col items-center justify-center gap-3 w-full">
-                            <GlassButton contentClassName="flex items-center justify-center gap-3" size="sm" className="w-full"><GoogleIcon /><span className="font-semibold text-gray-900">Google orqali</span></GlassButton>
-                            <GlassButton contentClassName="flex items-center justify-center gap-3" size="sm" className="w-full"><GitHubIcon /><span className="font-semibold text-gray-900">GitHub orqali</span></GlassButton>
-                            <GlassButton contentClassName="flex items-center justify-center gap-3" size="sm" className="w-full">
+                            <GlassButton disabled={modalStatus === 'loading'} onClick={() => handleSocialLogin(googleProvider)} contentClassName="flex items-center justify-center gap-3" size="sm" className="w-full"><GoogleIcon /><span className="font-semibold text-gray-900">Google orqali</span></GlassButton>
+                            <GlassButton disabled={modalStatus === 'loading'} onClick={handleGitHubLogin} contentClassName="flex items-center justify-center gap-3" size="sm" className="w-full"><GitHubIcon /><span className="font-semibold text-gray-900">GitHub orqali</span></GlassButton>
+                            <GlassButton 
+                                disabled={modalStatus === 'loading'}
+                                onClick={handleTelegramLogin} 
+                                contentClassName="flex items-center justify-center gap-3" 
+                                size="sm" 
+                                className="w-full"
+                            >
                               <span className="bg-blue-500 rounded-full p-1"><LucideSend size={12} className="text-white" /></span>
                               <span className="font-semibold text-gray-900">Telegram orqali</span>
                             </GlassButton>
