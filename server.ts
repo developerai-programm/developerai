@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import Groq from "groq-sdk";
 import dotenv from "dotenv";
@@ -245,6 +246,261 @@ app.post("/api/create-checkout", async (req, res) => {
     res.json({ checkoutUrl });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Recursively get all workspace files helper (excluding node_modules, .git, dist, build, package-lock.json)
+function getAllWorkspaceFiles(dirPath: string, fileList: { path: string; content: string }[] = [], relativePath = "") {
+  const files = fs.readdirSync(dirPath);
+
+  for (const file of files) {
+    const fullPath = path.join(dirPath, file);
+    const relPath = relativePath ? `${relativePath}/${file}` : file;
+
+    // Skip ignored directories/files
+    if (
+      file === "node_modules" ||
+      file === ".git" ||
+      file === "dist" ||
+      file === "package-lock.json" ||
+      file === ".env" ||
+      file === "results.txt" ||
+      file.endsWith(".png") ||
+      file.endsWith(".jpg") ||
+      file.endsWith(".jpeg") ||
+      file.endsWith(".ico") ||
+      file.endsWith(".gif") ||
+      file.endsWith(".webp")
+    ) {
+      continue;
+    }
+
+    if (fs.statSync(fullPath).isDirectory()) {
+      getAllWorkspaceFiles(fullPath, fileList, relPath);
+    } else {
+      try {
+        const content = fs.readFileSync(fullPath, "utf8");
+        fileList.push({ path: relPath, content });
+      } catch (err) {
+        console.error("Error reading file:", fullPath, err);
+      }
+    }
+  }
+
+  return fileList;
+}
+
+app.post("/api/github/export", async (req, res) => {
+  try {
+    const { token, repo, type, chats } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: "GitHub Personal Access Token (PAT) kiritilishi shart." });
+    }
+
+    if (!repo || !repo.includes("/")) {
+      return res.status(400).json({ error: "Repository formati noto'g'ri (Masalan: owner/repo)." });
+    }
+
+    const [owner, repoName] = repo.split("/");
+
+    const headers = {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "DEVELOPER-AI-App",
+    };
+
+    // 1. Get authenticated user's login
+    let authUserLogin = "";
+    try {
+      const userRes = await axios.get("https://api.github.com/user", { headers });
+      authUserLogin = userRes.data.login;
+    } catch (err: any) {
+      console.error("GitHub Auth profile fetch error:", err.response?.data || err.message);
+      return res.status(401).json({ error: "GitHub tokeningiz noto'g'ri yoki uning ruxsati yetarli emas. Iltimos qayta tekshiring." });
+    }
+
+    // 2. Check if repo exists, if not, create it
+    let repoExists = true;
+    try {
+      await axios.get(`https://api.github.com/repos/${owner}/${repoName}`, { headers });
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        repoExists = false;
+      } else {
+        throw new Error(`Repositoryni tekshirishda xatolik: ${err.response?.data?.message || err.message}`);
+      }
+    }
+
+    if (!repoExists) {
+      try {
+        if (owner.toLowerCase() === authUserLogin.toLowerCase()) {
+          // Create user repo
+          await axios.post(
+            "https://api.github.com/user/repos",
+            { name: repoName, private: false, auto_init: false },
+            { headers }
+          );
+        } else {
+          // Create org repo
+          await axios.post(
+            `https://api.github.com/orgs/${owner}/repos`,
+            { name: repoName, private: false, auto_init: false },
+            { headers }
+          );
+        }
+      } catch (err: any) {
+        console.error("Repo creation error:", err.response?.data || err.message);
+        return res.status(400).json({ 
+          error: `GitHub repository yaratib bo'lmadi. '${owner}' tashkilotiga repo yaratish ruxsatingiz bormi yoki '${repoName}' nomli repository allaqachon mavjud emasligini tekshiring.` 
+        });
+      }
+    }
+
+    // 3. Prepare files to commit
+    let filesToCommit: { path: string; content: string }[] = [];
+
+    if (type === "chats") {
+      // Create readable markdown and json representations of chats
+      if (!chats || !Array.isArray(chats) || chats.length === 0) {
+        return res.status(400).json({ error: "Eksport qilish uchun suhbatlar topilmadi." });
+      }
+
+      let markdownContent = `# DEVELOPER AI - Suhbatlar Tarixi\n\n`;
+      chats.forEach((chat: any) => {
+        markdownContent += `## ${chat.title || "Suhbat"} (${new Date(chat.timestamp).toLocaleString("uz-UZ")})\n`;
+        markdownContent += `**Turi:** ${chat.type ? chat.type.toUpperCase() : "Nomalum"}\n\n`;
+        
+        if (Array.isArray(chat.messages)) {
+          chat.messages.forEach((msg: any) => {
+            const roleName = msg.role === "user" ? "Foydalanuvchi" : "DEVELOPER AI";
+            const msgText = msg.parts?.[0]?.text || msg.content || "";
+            markdownContent += `### 👤 ${roleName}:\n${msgText}\n\n---\n\n`;
+          });
+        }
+      });
+
+      filesToCommit.push({
+        path: "chat_conversations.md",
+        content: markdownContent,
+      });
+      filesToCommit.push({
+        path: "chat_conversations.json",
+        content: JSON.stringify(chats, null, 2),
+      });
+    } else {
+      // Export original repository source files
+      filesToCommit = getAllWorkspaceFiles(process.cwd());
+    }
+
+    if (filesToCommit.length === 0) {
+      return res.status(400).json({ error: "Eksport qilish uchun hech qanday fayl topilmadi." });
+    }
+
+    // 4. Multi-file push using Git Database API
+    // Get master/main SHA
+    let lastCommitSha: string | null = null;
+    let baseTreeSha: string | null = null;
+    const branchName = "main";
+
+    try {
+      const branchRes = await axios.get(
+        `https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/${branchName}`,
+        { headers }
+      );
+      lastCommitSha = branchRes.data.object.sha;
+      
+      const commitRes = await axios.get(
+        `https://api.github.com/repos/${owner}/${repoName}/git/commits/${lastCommitSha}`,
+        { headers }
+      );
+      baseTreeSha = commitRes.data.tree.sha;
+    } catch (err: any) {
+      // Repo is empty or brand new
+      lastCommitSha = null;
+      baseTreeSha = null;
+    }
+
+    // Upload files as Blobs and construct Tree nodes
+    const treeNodes: any[] = [];
+    for (const file of filesToCommit) {
+      try {
+        const blobRes = await axios.post(
+          `https://api.github.com/repos/${owner}/${repoName}/git/blobs`,
+          { content: file.content, encoding: "utf-8" },
+          { headers }
+        );
+        treeNodes.push({
+          path: file.path,
+          mode: "100644",
+          type: "blob",
+          sha: blobRes.data.sha,
+        });
+      } catch (err: any) {
+        console.error(`Error uploading blob for ${file.path}:`, err.response?.data || err.message);
+      }
+    }
+
+    if (treeNodes.length === 0) {
+      return res.status(400).json({ error: "Fayllar GitHub blob-lariga yuklanmadi. Iltimos barcha fayllarni qayta tekshiring." });
+    }
+
+    // Create the new Tree
+    const treePayload: any = { tree: treeNodes };
+    if (baseTreeSha) {
+      treePayload.base_tree = baseTreeSha;
+    }
+
+    const treeRes = await axios.post(
+      `https://api.github.com/repos/${owner}/${repoName}/git/trees`,
+      treePayload,
+      { headers }
+    );
+    const newTreeSha = treeRes.data.sha;
+
+    // Create a Commit
+    const commitPayload: any = {
+      message: type === "chats" ? "Save chat conversations logs from DEVELOPER AI" : "Deploy codebase files from DEVELOPER AI applet workspace",
+      tree: newTreeSha,
+    };
+    if (lastCommitSha) {
+      commitPayload.parents = [lastCommitSha];
+    }
+
+    const commitRes = await axios.post(
+      `https://api.github.com/repos/${owner}/${repoName}/git/commits`,
+      commitPayload,
+      { headers }
+    );
+    const newCommitSha = commitRes.data.sha;
+
+    // Update the Ref
+    if (lastCommitSha) {
+      // Update existing ref
+      await axios.patch(
+        `https://api.github.com/repos/${owner}/${repoName}/git/refs/heads/${branchName}`,
+        { sha: newCommitSha, force: true },
+        { headers }
+      );
+    } else {
+      // Create new ref
+      await axios.post(
+        `https://api.github.com/repos/${owner}/${repoName}/git/refs`,
+        { ref: `refs/heads/${branchName}`, sha: newCommitSha },
+        { headers }
+      );
+    }
+
+    res.json({
+      success: true,
+      repoUrl: `https://github.com/${owner}/${repoName}`,
+      message: type === "chats" 
+        ? "Muvaffaqiyatli yuklandi! Suhbatlar tarixi chat_conversations.md va .json ko'rinishida saqlandi." 
+        : "Loyiha fayllari va to'liq kodi muvaffaqiyatli ravishda GitHub repository-ga yuborildi!",
+    });
+  } catch (error: any) {
+    console.error("GitHub Export Global Error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.message || error.message });
   }
 });
 
