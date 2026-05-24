@@ -524,4 +524,8 @@ async function setupVite() {
   });
 }
 
-setupVite();
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  setupVite();
+}
+
+export default app;

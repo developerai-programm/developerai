@@ -169,7 +169,7 @@ async function run() {
 
     console.log("Yangi Commit yaratilmoqda...");
     const commitPayload: any = {
-      message: "Push full codebase files dynamically from DEVELOPER AI applet",
+      message: "Add full Vercel compatibility support & serverless routing config",
       tree: newTreeSha,
     };
     if (lastCommitSha) {
