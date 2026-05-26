@@ -169,7 +169,7 @@ async function run() {
 
     console.log("Yangi Commit yaratilmoqda...");
     const commitPayload: any = {
-      message: "Enable dynamic Image and Video creation views perfectly for free",
+      message: "Fine-tune ImageGenView: remove styling & random button presets and implement robust preloader",
       tree: newTreeSha,
     };
     if (lastCommitSha) {

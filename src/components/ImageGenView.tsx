@@ -1,55 +1,20 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Download, Image as ImageIcon, Loader2, Sparkles, RefreshCcw } from 'lucide-react';
+import { Wand2, Download, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 export default function ImageGenView() {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const UzbekSamples = [
-    "Sokin tog' yonbag'ri, oltin soat quyosh nurlari, tiniq alpine ko'li va uning aks ettirishi, fotorealistik",
-    "Futuristik Toshkent 3050-yil, baland osmono'par uylar, uchib yuruvchi mashinalar va milliy naqshlar, kiberpank",
-    "Yoqimtoy 3D robot o'g'il bola ilmiy kitob o'qimoqda, Studio yoritgichlari, pastel ranglar, Blender 3D render",
-    "Afsonaviy sehrli o'rmon, yorug'lik tarqatuvchi miltillovchi qo'ziqorinlar, tumanli sirli daryo, akvarel uslubida",
-    "Minimalist chiziqlar bilan chizilgan chiroyli ayol portreti va gullar, chiziqli san'at (Line Art), estetik oq-qora fon",
-    "Retro-futuristik kiber kosmik kema kokpiti, neon boshqaruv panellari va oynadan ko'rinib turgan ulkan galaktika"
-  ];
-
-  const UzbekStyles = [
-    ", yuqori sifatli photorealistic render",
-    ", shirin 3D animatsion multfilm uslubi",
-    ", kiberpank yorqin neon uslubi",
-    ", klassik moybo'yoqli (oil painting) san'at asari",
-    ", minimalist chiziqli rasm (vector line art)",
-    ", fentezi uslubidagi raqamli illyustratsiya"
-  ];
-
-  const handleRandomPrompt = () => {
-    const randomIndex = Math.floor(Math.random() * UzbekSamples.length);
-    setPrompt(UzbekSamples[randomIndex]);
-    setError(null);
-  };
-
-  const handleAddStyle = () => {
-    if (!prompt.trim()) {
-      setPrompt("Chiroyli tabiat va futuristik shahar manzarasi" + UzbekStyles[Math.floor(Math.random() * UzbekStyles.length)]);
-    } else {
-      const randomStyle = UzbekStyles[Math.floor(Math.random() * UzbekStyles.length)];
-      // Prevent duplicating style suffix if already partially there
-      if (!prompt.includes(randomStyle.slice(0, 8))) {
-        setPrompt(prev => prev.trim() + randomStyle);
-      }
-    }
-    setError(null);
-  };
 
   const handleGenerate = async () => {
     if (!prompt.trim() || isLoading) return;
     setIsLoading(true);
     setResult(null);
     setError(null);
+    setImageLoading(false);
 
     try {
       const response = await globalThis.fetch('/api/generate-image', {
@@ -61,6 +26,7 @@ export default function ImageGenView() {
       if (!response.ok || data.error) {
         throw new Error(data.error || "Rasm generatsiyasida xatolik yuz berdi.");
       }
+      setImageLoading(true);
       setResult(data.imageUrl);
     } catch (err: any) {
       console.error(err);
@@ -90,23 +56,6 @@ export default function ImageGenView() {
                 placeholder="Masalan: Futuristik shahar, neon chiroqlar, kiberpank uslubida..."
                 className="w-full h-32 glass border-gray-200 rounded-2xl p-4 text-gray-900 outline-none focus:border-blue-500/50 transition-all resize-none"
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-               <button 
-                 type="button"
-                 onClick={handleAddStyle}
-                 className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
-               >
-                  <Sparkles size={16} /> Badiiy uslub
-               </button>
-               <button 
-                 type="button"
-                 onClick={handleRandomPrompt}
-                 className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
-               >
-                  <RefreshCcw size={16} /> Tasodifiy
-               </button>
             </div>
 
             {error && (
@@ -139,18 +88,41 @@ export default function ImageGenView() {
                 <img 
                   src={result} 
                   alt="Generated" 
-                  className="w-full h-full object-cover"
+                  onLoad={() => setImageLoading(false)}
+                  onError={() => {
+                    setImageLoading(false);
+                    setError("Tasvirni yuklashda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+                  }}
+                  className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                   <a 
-                    href={result} 
-                    download="generated-image.png"
-                    className="p-4 rounded-2xl bg-white text-black shadow-2xl hover:scale-110 active:scale-95 transition-all"
-                   >
-                     <Download size={24} />
-                   </a>
-                </div>
+
+                {imageLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50/95 gap-4 text-center p-6">
+                    <div className="relative">
+                      <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20" />
+                      <Loader2 size={48} className="animate-spin text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800 animate-pulse">Tasvir chizilmoqda...</p>
+                      <p className="text-[11px] text-gray-400 mt-1">Sun'iy intellekt ranglar va detallarni jilolamoqda. Biroz kuting.</p>
+                    </div>
+                  </div>
+                )}
+
+                {!imageLoading && (
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                     <a 
+                      href={result} 
+                      download="generated-image.png"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-4 rounded-2xl bg-white text-black shadow-2xl hover:scale-110 active:scale-95 transition-all"
+                     >
+                       <Download size={24} />
+                     </a>
+                  </div>
+                )}
               </motion.div>
             ) : (
               <motion.div
@@ -160,9 +132,12 @@ export default function ImageGenView() {
                 className="flex flex-col items-center gap-4 text-gray-300"
               >
                 {isLoading ? (
-                  <div className="relative">
-                     <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20" />
-                     <Loader2 size={64} className="animate-spin text-blue-500" />
+                  <div className="relative flex flex-col items-center gap-3">
+                     <div className="relative">
+                       <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20" />
+                       <Loader2 size={64} className="animate-spin text-blue-500" />
+                     </div>
+                     <p className="text-xs font-semibold text-blue-500 animate-pulse mt-2">Neyron tarmoq ishga tushirildi...</p>
                   </div>
                 ) : (
                   <>
