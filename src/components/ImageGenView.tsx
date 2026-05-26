@@ -6,11 +6,50 @@ export default function ImageGenView() {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const UzbekSamples = [
+    "Sokin tog' yonbag'ri, oltin soat quyosh nurlari, tiniq alpine ko'li va uning aks ettirishi, fotorealistik",
+    "Futuristik Toshkent 3050-yil, baland osmono'par uylar, uchib yuruvchi mashinalar va milliy naqshlar, kiberpank",
+    "Yoqimtoy 3D robot o'g'il bola ilmiy kitob o'qimoqda, Studio yoritgichlari, pastel ranglar, Blender 3D render",
+    "Afsonaviy sehrli o'rmon, yorug'lik tarqatuvchi miltillovchi qo'ziqorinlar, tumanli sirli daryo, akvarel uslubida",
+    "Minimalist chiziqlar bilan chizilgan chiroyli ayol portreti va gullar, chiziqli san'at (Line Art), estetik oq-qora fon",
+    "Retro-futuristik kiber kosmik kema kokpiti, neon boshqaruv panellari va oynadan ko'rinib turgan ulkan galaktika"
+  ];
+
+  const UzbekStyles = [
+    ", yuqori sifatli photorealistic render",
+    ", shirin 3D animatsion multfilm uslubi",
+    ", kiberpank yorqin neon uslubi",
+    ", klassik moybo'yoqli (oil painting) san'at asari",
+    ", minimalist chiziqli rasm (vector line art)",
+    ", fentezi uslubidagi raqamli illyustratsiya"
+  ];
+
+  const handleRandomPrompt = () => {
+    const randomIndex = Math.floor(Math.random() * UzbekSamples.length);
+    setPrompt(UzbekSamples[randomIndex]);
+    setError(null);
+  };
+
+  const handleAddStyle = () => {
+    if (!prompt.trim()) {
+      setPrompt("Chiroyli tabiat va futuristik shahar manzarasi" + UzbekStyles[Math.floor(Math.random() * UzbekStyles.length)]);
+    } else {
+      const randomStyle = UzbekStyles[Math.floor(Math.random() * UzbekStyles.length)];
+      // Prevent duplicating style suffix if already partially there
+      if (!prompt.includes(randomStyle.slice(0, 8))) {
+        setPrompt(prev => prev.trim() + randomStyle);
+      }
+    }
+    setError(null);
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim() || isLoading) return;
     setIsLoading(true);
     setResult(null);
+    setError(null);
 
     try {
       const response = await globalThis.fetch('/api/generate-image', {
@@ -19,9 +58,13 @@ export default function ImageGenView() {
         body: JSON.stringify({ prompt: prompt.trim() })
       });
       const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Rasm generatsiyasida xatolik yuz berdi.");
+      }
       setResult(data.imageUrl);
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Ulanish xatoligi. Server javob bermayapti.");
     } finally {
       setIsLoading(false);
     }
@@ -50,13 +93,27 @@ export default function ImageGenView() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               <button className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all">
+               <button 
+                 type="button"
+                 onClick={handleAddStyle}
+                 className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+               >
                   <Sparkles size={16} /> Badiiy uslub
                </button>
-               <button className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all">
+               <button 
+                 type="button"
+                 onClick={handleRandomPrompt}
+                 className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+               >
                   <RefreshCcw size={16} /> Tasodifiy
                </button>
             </div>
+
+            {error && (
+              <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-semibold leading-relaxed">
+                ⚠️ {error}
+              </div>
+            )}
 
             <button
               onClick={handleGenerate}

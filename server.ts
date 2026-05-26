@@ -211,7 +211,23 @@ Siz tayyorlagan kodlar har doim zamonaviy UI/UX talablariga mos, responsive va t
 });
 
 app.post("/api/generate-image", async (req, res) => {
-  res.status(403).json({ error: "Rasm yasash vaqtincha o'chiq." });
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Rasm yaratish uchun prompt kiritilishi shart." });
+    }
+    const cleanPrompt = encodeURIComponent(prompt.trim());
+    const width = 1024;
+    const height = 1024;
+    const seed = Math.floor(Math.random() * 1000000);
+    // Pollinations AI high-quality image URL representation
+    const imageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
+    
+    res.json({ imageUrl });
+  } catch (error: any) {
+    console.error("Image generation error:", error);
+    res.status(500).json({ error: "Tasvirni yaratib bo'lmadi. Iltimos qayta urinib ko'ring." });
+  }
 });
 
 app.post("/api/search", async (req, res) => {

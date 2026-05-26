@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import ChatView from './components/ChatView';
 import ImageGenView from './components/ImageGenView';
+import VideoGenView from './components/VideoGenView';
 import SearchView from './components/SearchView';
 import PricingView from './components/PricingView';
 import ProfileView from './components/ProfileView';
@@ -79,9 +80,11 @@ function App() {
       case 'music':
         return <MusicCreatorView />;
       case 'image':
+        return <ImageGenView />;
+      case 'video':
+        return <VideoGenView />;
       case 'image-edit':
       case 'analyze':
-      case 'video':
         return (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
              <div className="w-20 h-20 rounded-3xl bg-gray-100 flex items-center justify-center mb-6">

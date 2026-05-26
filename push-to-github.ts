@@ -169,7 +169,7 @@ async function run() {
 
     console.log("Yangi Commit yaratilmoqda...");
     const commitPayload: any = {
-      message: "Add full Vercel compatibility support & serverless routing config",
+      message: "Enable dynamic Image and Video creation views perfectly for free",
       tree: newTreeSha,
     };
     if (lastCommitSha) {
